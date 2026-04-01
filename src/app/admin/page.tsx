@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { getCategories, getDashboardStats, getPharmacies, getPendingPharmacies, getProducts, getRecentOrders, getRecentPrescriptions } from '@/lib/catalog'
+import { getAdminNotifications, getCategories, getDashboardStats, getPharmacies, getPendingPharmacies, getProducts, getRecentOrders, getRecentPrescriptions, getUnreadAdminNotificationCount } from '@/lib/catalog'
 import { formatCurrency } from '@/lib/utils'
 import { NewProductForm } from '@/components/new-product-form'
 import { OrdersTable } from '@/components/orders-table'
@@ -10,7 +10,17 @@ import { PharmacyApprovalList } from '@/components/pharmacy-approval-list'
 export default async function AdminPage() {
   await requireUser(['ADMIN'])
 
-  const [stats, products, orders, prescriptions, categories, pharmacies, pendingPharmacies] = await Promise.all([
+  const [
+    stats,
+    products,
+    orders,
+    prescriptions,
+    categories,
+    pharmacies,
+    pendingPharmacies,
+    notifications,
+    unreadNotifications,
+  ] = await Promise.all([
     getDashboardStats(),
     getProducts(),
     getRecentOrders(),
@@ -18,6 +28,8 @@ export default async function AdminPage() {
     getCategories(),
     getPharmacies(),
     getPendingPharmacies(),
+    getAdminNotifications(),
+    getUnreadAdminNotificationCount(),
   ])
 
   return (
@@ -33,6 +45,35 @@ export default async function AdminPage() {
         <Link href="/pharmacies" className="button button-secondary">
           Open public marketplace
         </Link>
+      </div>
+
+      <div className="section">
+        <div className="section-heading">
+          <div>
+            <span className="badge">Notifications</span>
+            <h3>Admin alerts</h3>
+            <p className="muted">New onboarding requests and urgent marketplace events.</p>
+          </div>
+          <Link href="/admin/notifications" className="button button-secondary">
+            Open notifications
+            {unreadNotifications > 0 ? <span className="badge">{unreadNotifications}</span> : null}
+          </Link>
+        </div>
+        <div className="stack">
+          {notifications.slice(0, 3).map((notification) => (
+            <article key={notification.id} className="card">
+              <div className="section-heading">
+                <div>
+                  <span className="badge">{notification.type.replaceAll('_', ' ')}</span>
+                  <h3>{notification.title}</h3>
+                </div>
+                <span className="badge">{notification.readAt ? 'Read' : 'Unread'}</span>
+              </div>
+              <p className="muted">{notification.message}</p>
+              {notification.pharmacy ? <p className="muted">{notification.pharmacy.name}</p> : null}
+            </article>
+          ))}
+        </div>
       </div>
 
       <div className="grid-products" style={{ marginBottom: 18 }}>

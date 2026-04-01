@@ -19,9 +19,24 @@ function normalizeTerms(value: string) {
     .filter(Boolean)
 }
 
-function getProductScore({
+function overlapCount(left: Set<string>, right: Set<string>) {
+  let count = 0
+  for (const term of left) {
+    if (right.has(term)) {
+      count += 1
+    }
+  }
+  return count
+}
+
+function buildCandidateSet(values: Array<string | null | undefined>) {
+  return new Set(values.flatMap((value) => normalizeTerms(value ?? '')))
+}
+
+function scoreProductCandidate({
   product,
   item,
+  destinationCity,
   deliveryLatitude,
   deliveryLongitude,
 }: {
@@ -31,9 +46,15 @@ function getProductScore({
     routeKey: string
     scientificName: string | null
     manufacturer: string | null
+    category: { name: string | null } | null
+    tags: string | null
+    dosage: string | null
+    form: string | null
+    city?: string | null
     stock: number
     pharmacyId: string
     pharmacy: {
+      city?: string | null
       rating: number
       latitude: number | null
       longitude: number | null
@@ -46,57 +67,122 @@ function getProductScore({
     pharmacyId: string
     quantity: number
   }
+  destinationCity: string
   deliveryLatitude: number | null
   deliveryLongitude: number | null
 }) {
+  const itemTerms = buildCandidateSet([item.routeKey, item.name])
+  const routeTerms = buildCandidateSet([product.routeKey])
+  const nameTerms = buildCandidateSet([product.name])
+  const scientificTerms = buildCandidateSet([product.scientificName])
+  const manufacturerTerms = buildCandidateSet([product.manufacturer])
+  const categoryTerms = buildCandidateSet([product.category?.name])
+  const tagTerms = buildCandidateSet([product.tags])
+  const dosageTerms = buildCandidateSet([product.dosage])
+  const formTerms = buildCandidateSet([product.form])
+
   const exactRouteKey = product.routeKey.trim().toLowerCase() === item.routeKey.trim().toLowerCase()
   const exactName = product.name.trim().toLowerCase() === item.name.trim().toLowerCase()
-  const itemTerms = new Set([...normalizeTerms(item.routeKey), ...normalizeTerms(item.name)])
-  const candidateTerms = new Set(
-    [
-      ...normalizeTerms(product.routeKey),
-      ...normalizeTerms(product.name),
-      ...normalizeTerms(product.scientificName ?? ''),
-      ...normalizeTerms(product.manufacturer ?? ''),
-    ].filter(Boolean),
-  )
-
-  let overlap = 0
-  for (const term of itemTerms) {
-    if (candidateTerms.has(term)) {
-      overlap += 1
-    }
-  }
+  const routeOverlap = overlapCount(itemTerms, routeTerms)
+  const nameOverlap = overlapCount(itemTerms, nameTerms)
+  const scientificOverlap = overlapCount(itemTerms, scientificTerms)
+  const manufacturerOverlap = overlapCount(itemTerms, manufacturerTerms)
+  const categoryOverlap = overlapCount(itemTerms, categoryTerms)
+  const tagOverlap = overlapCount(itemTerms, tagTerms)
+  const dosageOverlap = overlapCount(itemTerms, dosageTerms)
+  const formOverlap = overlapCount(itemTerms, formTerms)
 
   let score = 0
+  const reasons: string[] = []
+
   if (exactRouteKey) {
     score += 5000
+    reasons.push('exact route key')
   }
   if (exactName) {
     score += 1200
+    reasons.push('exact product name')
   }
-  score += overlap * 180
+  if (routeOverlap > 0) {
+    score += routeOverlap * 300
+    reasons.push(`${routeOverlap} route term match${routeOverlap > 1 ? 'es' : ''}`)
+  }
+  if (nameOverlap > 0) {
+    score += nameOverlap * 220
+    reasons.push(`${nameOverlap} product name term match${nameOverlap > 1 ? 'es' : ''}`)
+  }
+  if (scientificOverlap > 0) {
+    score += scientificOverlap * 260
+    reasons.push(`${scientificOverlap} scientific name term match${scientificOverlap > 1 ? 'es' : ''}`)
+  }
+  if (manufacturerOverlap > 0) {
+    score += manufacturerOverlap * 180
+    reasons.push(`${manufacturerOverlap} manufacturer term match${manufacturerOverlap > 1 ? 'es' : ''}`)
+  }
+  if (categoryOverlap > 0) {
+    score += categoryOverlap * 200
+    reasons.push(`${categoryOverlap} category term match${categoryOverlap > 1 ? 'es' : ''}`)
+  }
+  if (tagOverlap > 0) {
+    score += tagOverlap * 150
+    reasons.push(`${tagOverlap} tag match${tagOverlap > 1 ? 'es' : ''}`)
+  }
+  if (dosageOverlap > 0) {
+    score += dosageOverlap * 120
+    reasons.push(`${dosageOverlap} dosage term match${dosageOverlap > 1 ? 'es' : ''}`)
+  }
+  if (formOverlap > 0) {
+    score += formOverlap * 90
+    reasons.push(`${formOverlap} form term match${formOverlap > 1 ? 'es' : ''}`)
+  }
+
+  if (
+    destinationCity &&
+    product.pharmacy.city &&
+    product.pharmacy.city.trim().toLowerCase() === destinationCity.trim().toLowerCase()
+  ) {
+    score += 40
+    reasons.push('same destination city')
+  }
+
   score += product.pharmacy.rating * 12
   score += Math.min(product.stock, 100) * 0.5
   if (product.pharmacyId === item.pharmacyId) {
     score += 60
+    reasons.push('same source pharmacy')
   }
 
+  let distanceKm: number | null = null
   if (
     deliveryLatitude != null &&
     deliveryLongitude != null &&
     product.pharmacy.latitude != null &&
     product.pharmacy.longitude != null
   ) {
-    score -= haversineKm(
+    distanceKm = haversineKm(
       deliveryLatitude,
       deliveryLongitude,
       product.pharmacy.latitude,
       product.pharmacy.longitude,
-    ) * 15
+    )
+    score -= distanceKm * 15
+    reasons.push(`${distanceKm.toFixed(1)} km away`)
   }
 
-  return score
+  const strategy = exactRouteKey
+    ? 'exact-route-match'
+    : scientificOverlap > 0 || categoryOverlap > 0 || manufacturerOverlap > 0 || nameOverlap > 0
+      ? 'semantic-substitute'
+      : routeOverlap > 0
+        ? 'route-key-substitute'
+        : 'nearest-fallback'
+
+  return {
+    score,
+    strategy,
+    reason: reasons.length ? reasons.join(', ') : 'nearest active pharmacy fallback',
+    distanceKm,
+  }
 }
 
 export async function GET() {
@@ -190,7 +276,7 @@ export async function POST(request: Request) {
       active: true,
       pharmacy: { status: 'ACTIVE' },
     },
-    include: { pharmacy: true },
+    include: { pharmacy: true, category: true },
   })
 
   if (!products.length) {
@@ -208,7 +294,7 @@ export async function POST(request: Request) {
         active: true,
         pharmacy: { status: 'ACTIVE' },
       },
-      include: { pharmacy: true },
+      include: { pharmacy: true, category: true },
     })
 
     const selectedItems = items.map((item) => {
@@ -221,22 +307,23 @@ export async function POST(request: Request) {
       const scored = eligible
         .map((product) => ({
           product,
-          score: getProductScore({
+          ...scoreProductCandidate({
             product,
             item,
+            destinationCity: city,
             deliveryLatitude,
             deliveryLongitude,
           }),
         }))
         .sort((a, b) => b.score - a.score)
 
-      const bestMatch = scored[0]?.product
+      const bestMatch = scored[0]
 
       if (!bestMatch) {
         throw new Error(`No pharmacy has enough stock for ${item.name}.`)
       }
 
-      return { item, product: bestMatch }
+      return { item, product: bestMatch.product, strategy: bestMatch.strategy, reason: bestMatch.reason, score: bestMatch.score, distanceKm: bestMatch.distanceKm }
     })
 
     const subtotal = selectedItems.reduce((sum, entry) => {
@@ -314,6 +401,23 @@ export async function POST(request: Request) {
             quantity: item.item.quantity,
             unitPrice,
             lineTotal: toAmount(unitPrice * item.item.quantity),
+          },
+        })
+
+        await tx.assignmentEvent.create({
+          data: {
+            customerOrderId: createdOrder.id,
+            pharmacyOrderId: pharmacyOrder.id,
+            requestedItemName: item.item.name,
+            requestedRouteKey: item.item.routeKey,
+            requestedPharmacyName: item.item.pharmacyName || null,
+            selectedProductName: item.product.name,
+            selectedRouteKey: item.product.routeKey,
+            selectedPharmacyName: item.product.pharmacy.name,
+            strategy: item.strategy,
+            reason: item.reason,
+            score: item.score,
+            distanceKm: item.distanceKm,
           },
         })
 

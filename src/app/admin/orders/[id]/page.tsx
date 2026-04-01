@@ -92,6 +92,45 @@ export default async function AdminOrderDetailsPage({
           </div>
         </div>
       </div>
+
+      <div className="section">
+        <div className="card">
+          <div className="section-heading">
+            <div>
+              <span className="badge">Assignment history</span>
+              <h3>How each item was routed</h3>
+            </div>
+            <p className="muted">{order.assignmentEvents.length} routing event(s)</p>
+          </div>
+          {order.assignmentEvents.length ? (
+            <div className="stack">
+              {order.assignmentEvents.map((event) => (
+                <article className="cart-row" key={event.id}>
+                  <div>
+                    <strong>{event.requestedItemName}</strong>
+                    <p className="muted">
+                      Requested: {event.requestedRouteKey}
+                      {event.requestedPharmacyName ? ` from ${event.requestedPharmacyName}` : ''}
+                    </p>
+                    <p className="muted">
+                      Assigned: {event.selectedProductName} at {event.selectedPharmacyName}
+                    </p>
+                    <p className="muted">
+                      Strategy: {event.strategy.replaceAll('-', ' ')} - {event.reason}
+                    </p>
+                  </div>
+                  <span className="badge">
+                    Score {event.score.toFixed(0)}
+                    {event.distanceKm != null ? ` · ${event.distanceKm.toFixed(1)} km` : ''}
+                  </span>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="muted">No assignment history recorded for this order yet.</p>
+          )}
+        </div>
+      </div>
     </section>
   )
 }

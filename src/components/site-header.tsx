@@ -1,10 +1,13 @@
 import Link from 'next/link'
 import { LayoutDashboard, Pill, ShoppingBag, UserCircle2 } from 'lucide-react'
 import { getCurrentUser } from '@/lib/auth'
+import { getUnreadAdminNotificationCount } from '@/lib/catalog'
 import { LogoutButton } from '@/components/logout-button'
 
 export async function SiteHeader() {
   const user = await getCurrentUser()
+  const unreadNotifications =
+    user?.role === 'ADMIN' ? await getUnreadAdminNotificationCount() : 0
 
   return (
     <header className="header">
@@ -33,6 +36,12 @@ export async function SiteHeader() {
             </Link>
           ) : null}
           {user?.role === 'ADMIN' ? <Link href="/admin/orders">Orders</Link> : null}
+          {user?.role === 'ADMIN' ? (
+            <Link href="/admin/notifications">
+              Notifications
+              {unreadNotifications > 0 ? <span className="badge">{unreadNotifications}</span> : null}
+            </Link>
+          ) : null}
           {user?.role === 'PHARMACY' ? (
             <Link href="/pharmacy">
               <LayoutDashboard size={16} />

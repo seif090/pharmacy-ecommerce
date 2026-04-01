@@ -10,6 +10,8 @@ db.exec(`
   PRAGMA foreign_keys = ON;
 
   DROP TABLE IF EXISTS "Prescription";
+  DROP TABLE IF EXISTS "AssignmentEvent";
+  DROP TABLE IF EXISTS "AdminNotification";
   DROP TABLE IF EXISTS "OrderItem";
   DROP TABLE IF EXISTS "PharmacyOrder";
   DROP TABLE IF EXISTS "CustomerOrder";
@@ -46,6 +48,18 @@ db.exec(`
   );
   CREATE UNIQUE INDEX "Pharmacy_slug_key" ON "Pharmacy"("slug");
   CREATE UNIQUE INDEX "Pharmacy_licenseNumber_key" ON "Pharmacy"("licenseNumber");
+
+  CREATE TABLE "AdminNotification" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "type" TEXT NOT NULL DEFAULT 'PHARMACY_PENDING',
+    "title" TEXT NOT NULL,
+    "message" TEXT NOT NULL,
+    "pharmacyId" TEXT,
+    "readAt" BIGINT,
+    "createdAt" BIGINT NOT NULL,
+    "updatedAt" BIGINT NOT NULL,
+    CONSTRAINT "AdminNotification_pharmacyId_fkey" FOREIGN KEY ("pharmacyId") REFERENCES "Pharmacy"("id") ON DELETE SET NULL ON UPDATE CASCADE
+  );
 
   CREATE TABLE "PharmacyUser" (
     "id" TEXT NOT NULL PRIMARY KEY,
@@ -135,6 +149,25 @@ db.exec(`
     "updatedAt" BIGINT NOT NULL,
     CONSTRAINT "PharmacyOrder_customerOrderId_fkey" FOREIGN KEY ("customerOrderId") REFERENCES "CustomerOrder"("id") ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT "PharmacyOrder_pharmacyId_fkey" FOREIGN KEY ("pharmacyId") REFERENCES "Pharmacy"("id") ON DELETE CASCADE ON UPDATE CASCADE
+  );
+
+  CREATE TABLE "AssignmentEvent" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "customerOrderId" TEXT NOT NULL,
+    "pharmacyOrderId" TEXT,
+    "requestedItemName" TEXT NOT NULL,
+    "requestedRouteKey" TEXT NOT NULL,
+    "requestedPharmacyName" TEXT,
+    "selectedProductName" TEXT NOT NULL,
+    "selectedRouteKey" TEXT NOT NULL,
+    "selectedPharmacyName" TEXT NOT NULL,
+    "strategy" TEXT NOT NULL,
+    "reason" TEXT NOT NULL,
+    "score" REAL NOT NULL,
+    "distanceKm" REAL,
+    "createdAt" BIGINT NOT NULL,
+    CONSTRAINT "AssignmentEvent_customerOrderId_fkey" FOREIGN KEY ("customerOrderId") REFERENCES "CustomerOrder"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "AssignmentEvent_pharmacyOrderId_fkey" FOREIGN KEY ("pharmacyOrderId") REFERENCES "PharmacyOrder"("id") ON DELETE SET NULL ON UPDATE CASCADE
   );
 
   CREATE TABLE "OrderItem" (

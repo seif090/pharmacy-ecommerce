@@ -33,5 +33,17 @@ export async function PATCH(
     },
   })
 
+  if (body.status && body.status !== 'PENDING') {
+    await prisma.adminNotification.updateMany({
+      where: {
+        pharmacyId: id,
+        readAt: null,
+      },
+      data: {
+        readAt: new Date(),
+      },
+    })
+  }
+
   return NextResponse.json({ pharmacy: updated })
 }

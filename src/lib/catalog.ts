@@ -33,6 +33,22 @@ export async function getPendingPharmacies() {
   })
 }
 
+export async function getUnreadAdminNotificationCount() {
+  const prisma = getPrisma()
+  return prisma.adminNotification.count({
+    where: { readAt: null },
+  })
+}
+
+export async function getAdminNotifications() {
+  const prisma = getPrisma()
+  return prisma.adminNotification.findMany({
+    orderBy: [{ readAt: 'asc' }, { createdAt: 'desc' }],
+    take: 24,
+    include: { pharmacy: true },
+  })
+}
+
 export async function getProducts(options?: {
   search?: string
   category?: string
@@ -131,6 +147,9 @@ export async function getCustomerOrderById(id: string) {
           },
         },
       },
+      assignmentEvents: {
+        orderBy: { createdAt: 'asc' },
+      },
     },
   })
 }
@@ -144,6 +163,9 @@ export async function getPharmacyOrderById(id: string) {
       pharmacy: true,
       items: { include: { product: true } },
       prescription: { include: { reviewer: true } },
+      assignmentEvents: {
+        orderBy: { createdAt: 'asc' },
+      },
     },
   })
 }
@@ -174,6 +196,7 @@ export async function getPharmacyDashboard(pharmacyId: string) {
         customerOrder: true,
         items: { include: { product: true } },
         prescription: true,
+        assignmentEvents: true,
       },
     }),
     prisma.product.findMany({

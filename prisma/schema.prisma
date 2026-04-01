@@ -31,6 +31,7 @@ model Pharmacy {
   products        Product[]
   users           PharmacyUser[]
   pharmacyOrders  PharmacyOrder[]
+  adminNotifications AdminNotification[]
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 }
@@ -105,6 +106,7 @@ model CustomerOrder {
   paymentMethod String
   prescriptions Prescription[]
   pharmacyOrders PharmacyOrder[]
+  assignmentEvents AssignmentEvent[]
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 }
@@ -124,6 +126,7 @@ model PharmacyOrder {
   pharmacy          Pharmacy      @relation(fields: [pharmacyId], references: [id], onDelete: Cascade)
   items             OrderItem[]
   prescription      Prescription?
+  assignmentEvents  AssignmentEvent[]
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 }
@@ -161,6 +164,37 @@ model Prescription {
   updatedAt        DateTime      @updatedAt
 }
 
+model AssignmentEvent {
+  id                  String       @id @default(cuid())
+  customerOrderId     String
+  pharmacyOrderId     String?
+  requestedItemName   String
+  requestedRouteKey   String
+  requestedPharmacyName String?
+  selectedProductName String
+  selectedRouteKey    String
+  selectedPharmacyName String
+  strategy            String
+  reason              String
+  score               Float
+  distanceKm          Float?
+  customerOrder       CustomerOrder @relation(fields: [customerOrderId], references: [id], onDelete: Cascade)
+  pharmacyOrder       PharmacyOrder? @relation(fields: [pharmacyOrderId], references: [id], onDelete: SetNull)
+  createdAt           DateTime     @default(now())
+}
+
+model AdminNotification {
+  id          String              @id @default(cuid())
+  type        AdminNotificationType @default(PHARMACY_PENDING)
+  title       String
+  message     String
+  pharmacyId  String?
+  readAt      DateTime?
+  pharmacy    Pharmacy?           @relation(fields: [pharmacyId], references: [id], onDelete: SetNull)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+}
+
 enum OrderStatus {
   PENDING
   PARTIALLY_CONFIRMED
@@ -196,4 +230,8 @@ enum PharmacyStatus {
 enum UserRole {
   ADMIN
   PHARMACY
+}
+
+enum AdminNotificationType {
+  PHARMACY_PENDING
 }

@@ -84,6 +84,37 @@ export default async function PharmacyOrderDetailsPage({
           {order.prescription ? <p className="muted">Prescription: {order.prescription.status}</p> : null}
         </div>
       </div>
+
+      <div className="section">
+        <div className="card">
+          <div className="section-heading">
+            <div>
+              <span className="badge">Assignment history</span>
+              <h3>Routing context for this suborder</h3>
+            </div>
+            <p className="muted">{order.assignmentEvents.length} event(s)</p>
+          </div>
+          {order.assignmentEvents.length ? (
+            <div className="stack">
+              {order.assignmentEvents.map((event) => (
+                <article className="cart-row" key={event.id}>
+                  <div>
+                    <strong>{event.requestedItemName}</strong>
+                    <p className="muted">Strategy: {event.strategy.replaceAll('-', ' ')}</p>
+                    <p className="muted">{event.reason}</p>
+                  </div>
+                  <span className="badge">
+                    Score {event.score.toFixed(0)}
+                    {event.distanceKm != null ? ` · ${event.distanceKm.toFixed(1)} km` : ''}
+                  </span>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="muted">No assignment history recorded for this suborder yet.</p>
+          )}
+        </div>
+      </div>
     </section>
   )
 }

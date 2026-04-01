@@ -52,6 +52,15 @@ export async function POST(request: Request) {
     },
   })
 
+  await prisma.adminNotification.create({
+    data: {
+      type: 'PHARMACY_PENDING',
+      title: 'New pharmacy awaiting approval',
+      message: `${pharmacy.name} in ${pharmacy.city} was submitted for onboarding and needs admin review.`,
+      pharmacyId: pharmacy.id,
+    },
+  })
+
   const user = await prisma.pharmacyUser.create({
     data: {
       pharmacyId: pharmacy.id,
