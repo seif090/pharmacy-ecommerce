@@ -10,6 +10,95 @@ function jsonResponse(message: string, status = 400) {
   return NextResponse.json({ message }, { status })
 }
 
+function normalizeTerms(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+}
+
+function getProductScore({
+  product,
+  item,
+  deliveryLatitude,
+  deliveryLongitude,
+}: {
+  product: {
+    id: string
+    name: string
+    routeKey: string
+    scientificName: string | null
+    manufacturer: string | null
+    stock: number
+    pharmacyId: string
+    pharmacy: {
+      rating: number
+      latitude: number | null
+      longitude: number | null
+    }
+  }
+  item: {
+    id: string
+    name: string
+    routeKey: string
+    pharmacyId: string
+    quantity: number
+  }
+  deliveryLatitude: number | null
+  deliveryLongitude: number | null
+}) {
+  const exactRouteKey = product.routeKey.trim().toLowerCase() === item.routeKey.trim().toLowerCase()
+  const exactName = product.name.trim().toLowerCase() === item.name.trim().toLowerCase()
+  const itemTerms = new Set([...normalizeTerms(item.routeKey), ...normalizeTerms(item.name)])
+  const candidateTerms = new Set(
+    [
+      ...normalizeTerms(product.routeKey),
+      ...normalizeTerms(product.name),
+      ...normalizeTerms(product.scientificName ?? ''),
+      ...normalizeTerms(product.manufacturer ?? ''),
+    ].filter(Boolean),
+  )
+
+  let overlap = 0
+  for (const term of itemTerms) {
+    if (candidateTerms.has(term)) {
+      overlap += 1
+    }
+  }
+
+  let score = 0
+  if (exactRouteKey) {
+    score += 5000
+  }
+  if (exactName) {
+    score += 1200
+  }
+  score += overlap * 180
+  score += product.pharmacy.rating * 12
+  score += Math.min(product.stock, 100) * 0.5
+  if (product.pharmacyId === item.pharmacyId) {
+    score += 60
+  }
+
+  if (
+    deliveryLatitude != null &&
+    deliveryLongitude != null &&
+    product.pharmacy.latitude != null &&
+    product.pharmacy.longitude != null
+  ) {
+    score -= haversineKm(
+      deliveryLatitude,
+      deliveryLongitude,
+      product.pharmacy.latitude,
+      product.pharmacy.longitude,
+    ) * 15
+  }
+
+  return score
+}
+
 export async function GET() {
   const prisma = getPrisma()
   const orders = await prisma.customerOrder.findMany({
@@ -96,17 +185,16 @@ export async function POST(request: Request) {
     return jsonResponse('Cart is empty.')
   }
 
-  const routeKeys = [...new Set(items.map((item) => item.routeKey).filter(Boolean))]
   const products = await prisma.product.findMany({
     where: {
-      OR: [{ routeKey: { in: routeKeys } }],
       active: true,
+      pharmacy: { status: 'ACTIVE' },
     },
     include: { pharmacy: true },
   })
 
   if (!products.length) {
-    return jsonResponse('No pharmacies are available for the selected products.', 404)
+    return jsonResponse('No active pharmacies are available right now.', 404)
   }
 
   const requiresPrescription = items.some((item) => item.requiresPrescription)
@@ -115,44 +203,40 @@ export async function POST(request: Request) {
   }
 
   const order = await prisma.$transaction(async (tx) => {
+    const activeProducts = await tx.product.findMany({
+      where: {
+        active: true,
+        pharmacy: { status: 'ACTIVE' },
+      },
+      include: { pharmacy: true },
+    })
+
     const selectedItems = items.map((item) => {
-      const candidates = products.filter((product) => product.routeKey === item.routeKey)
-      const currentProduct = products.find((product) => product.id === item.id)
-      const eligible = candidates.filter((candidate) => candidate.stock >= item.quantity)
+      const eligible = activeProducts.filter((product) => product.stock >= item.quantity)
 
       if (!eligible.length) {
         throw new Error(`No pharmacy has enough stock for ${item.name}.`)
       }
 
-      if (deliveryLatitude != null && deliveryLongitude != null) {
-        eligible.sort((a, b) => {
-          const aDistance =
-            a.pharmacy.latitude != null && a.pharmacy.longitude != null
-              ? haversineKm(
-                  deliveryLatitude,
-                  deliveryLongitude,
-                  a.pharmacy.latitude,
-                  a.pharmacy.longitude,
-                )
-              : Number.POSITIVE_INFINITY
-          const bDistance =
-            b.pharmacy.latitude != null && b.pharmacy.longitude != null
-              ? haversineKm(
-                  deliveryLatitude,
-                  deliveryLongitude,
-                  b.pharmacy.latitude,
-                  b.pharmacy.longitude,
-                )
-              : Number.POSITIVE_INFINITY
-          return aDistance - bDistance
-        })
-      } else if (currentProduct && eligible.some((candidate) => candidate.id === currentProduct.id)) {
-        eligible.sort((a, b) => (a.id === currentProduct.id ? -1 : b.id === currentProduct.id ? 1 : 0))
-      } else {
-        eligible.sort((a, b) => b.pharmacy.rating - a.pharmacy.rating || b.stock - a.stock)
+      const scored = eligible
+        .map((product) => ({
+          product,
+          score: getProductScore({
+            product,
+            item,
+            deliveryLatitude,
+            deliveryLongitude,
+          }),
+        }))
+        .sort((a, b) => b.score - a.score)
+
+      const bestMatch = scored[0]?.product
+
+      if (!bestMatch) {
+        throw new Error(`No pharmacy has enough stock for ${item.name}.`)
       }
 
-      return { item, product: eligible[0] }
+      return { item, product: bestMatch }
     })
 
     const subtotal = selectedItems.reduce((sum, entry) => {

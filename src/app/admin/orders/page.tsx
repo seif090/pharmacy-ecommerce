@@ -29,7 +29,7 @@ export default async function AdminOrdersPage() {
             total: pharmacyOrder.total,
             estimatedSlaMins: pharmacyOrder.estimatedSlaMins,
             notes: pharmacyOrder.notes,
-            pharmacy: { name: pharmacyOrder.pharmacy.name },
+            detailsHref: `/admin/orders/${order.id}`,
             customerOrder: {
               orderNumber: order.orderNumber,
               customerName: order.customerName,

@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useState } from 'react'
 import { formatCurrency } from '@/lib/utils'
 
@@ -10,7 +11,7 @@ type BoardOrder = {
   total: unknown
   estimatedSlaMins: number
   notes?: string | null
-  pharmacy?: { name: string }
+  detailsHref: string
   customerOrder: { orderNumber: string; customerName: string; city: string }
   items: Array<{ productName?: string; quantity: number; product?: { name: string } }>
   prescription?: { status: string } | null
@@ -43,7 +44,9 @@ export function PharmacyOrderBoard({
       return
     }
 
-    const result = (await response.json()) as { pharmacyOrder?: BoardOrder }
+    const result = (await response.json()) as {
+      pharmacyOrder?: Partial<BoardOrder> & { id: string }
+    }
     if (result.pharmacyOrder) {
       setItems((current) =>
         current.map((item) => (item.id === id ? { ...item, ...result.pharmacyOrder } : item)),
@@ -62,13 +65,15 @@ export function PharmacyOrderBoard({
           <div className="section-heading">
             <div>
               <span className="badge">{order.status}</span>
-              <h3>{order.customerOrder.orderNumber}</h3>
+              <h3>
+                <Link href={order.detailsHref as never}>{order.customerOrder.orderNumber}</Link>
+              </h3>
               <p className="muted">
                 {order.customerOrder.customerName} - {order.customerOrder.city}
               </p>
             </div>
             <span className="badge">
-              SLA {order.estimatedSlaMins}m · {formatCurrency(Number(order.total))}
+              SLA {order.estimatedSlaMins}m - {formatCurrency(Number(order.total))}
             </span>
           </div>
           <p className="muted">

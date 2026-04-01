@@ -1,4 +1,5 @@
 import { formatCurrency } from '@/lib/utils'
+import Link from 'next/link'
 
 export function OrdersTable({
   orders,
@@ -45,7 +46,9 @@ export function OrdersTable({
             {orders.map((order) => (
               <tr key={order.id}>
                 <td>
-                  <strong>{order.orderNumber}</strong>
+                  <Link href={`/admin/orders/${order.id}`}>
+                    <strong>{order.orderNumber}</strong>
+                  </Link>
                   <div className="muted">{order.paymentMethod}</div>
                 </td>
                 <td>

@@ -1,21 +1,23 @@
 import Link from 'next/link'
-import { getCategories, getDashboardStats, getPharmacies, getProducts, getRecentOrders, getRecentPrescriptions } from '@/lib/catalog'
+import { getCategories, getDashboardStats, getPharmacies, getPendingPharmacies, getProducts, getRecentOrders, getRecentPrescriptions } from '@/lib/catalog'
 import { formatCurrency } from '@/lib/utils'
 import { NewProductForm } from '@/components/new-product-form'
 import { OrdersTable } from '@/components/orders-table'
 import { PrescriptionReviewList } from '@/components/prescription-review-list'
 import { requireUser } from '@/lib/auth'
+import { PharmacyApprovalList } from '@/components/pharmacy-approval-list'
 
 export default async function AdminPage() {
   await requireUser(['ADMIN'])
 
-  const [stats, products, orders, prescriptions, categories, pharmacies] = await Promise.all([
+  const [stats, products, orders, prescriptions, categories, pharmacies, pendingPharmacies] = await Promise.all([
     getDashboardStats(),
     getProducts(),
     getRecentOrders(),
     getRecentPrescriptions(),
     getCategories(),
     getPharmacies(),
+    getPendingPharmacies(),
   ])
 
   return (
@@ -77,6 +79,16 @@ export default async function AdminPage() {
             ))}
           </div>
         </div>
+      </div>
+
+      <div className="section">
+        <div className="section-heading">
+          <div>
+            <h3>Pending pharmacy approvals</h3>
+            <p className="muted">Review new partner registrations before they go live.</p>
+          </div>
+        </div>
+        <PharmacyApprovalList pharmacies={pendingPharmacies} />
       </div>
 
       <div className="section">

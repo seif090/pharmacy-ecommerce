@@ -16,6 +16,19 @@ export async function getPharmacies() {
     orderBy: [{ rating: 'desc' }, { createdAt: 'desc' }],
     include: {
       _count: { select: { products: true, pharmacyOrders: true } },
+      users: { select: { name: true, email: true } },
+    },
+  })
+}
+
+export async function getPendingPharmacies() {
+  const prisma = getPrisma()
+  return prisma.pharmacy.findMany({
+    where: { status: 'PENDING' },
+    orderBy: { createdAt: 'desc' },
+    include: {
+      _count: { select: { products: true, pharmacyOrders: true } },
+      users: { select: { name: true, email: true } },
     },
   })
 }
@@ -98,6 +111,39 @@ export async function getRecentOrders() {
           prescription: true,
         },
       },
+    },
+  })
+}
+
+export async function getCustomerOrderById(id: string) {
+  const prisma = getPrisma()
+  return prisma.customerOrder.findUnique({
+    where: { id },
+    include: {
+      pharmacyOrders: {
+        include: {
+          pharmacy: true,
+          items: { include: { product: true } },
+          prescription: {
+            include: {
+              reviewer: true,
+            },
+          },
+        },
+      },
+    },
+  })
+}
+
+export async function getPharmacyOrderById(id: string) {
+  const prisma = getPrisma()
+  return prisma.pharmacyOrder.findUnique({
+    where: { id },
+    include: {
+      customerOrder: true,
+      pharmacy: true,
+      items: { include: { product: true } },
+      prescription: { include: { reviewer: true } },
     },
   })
 }

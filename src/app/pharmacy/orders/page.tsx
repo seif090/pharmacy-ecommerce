@@ -30,7 +30,12 @@ export default async function PharmacyOrdersPage() {
         </Link>
       </div>
 
-      <PharmacyOrderBoard orders={dashboard.orders} />
+      <PharmacyOrderBoard
+        orders={dashboard.orders.map((order) => ({
+          ...order,
+          detailsHref: `/pharmacy/orders/${order.id}`,
+        }))}
+      />
     </section>
   )
 }
