@@ -17,6 +17,7 @@ import { PrescriptionReviewList } from '@/components/prescription-review-list'
 import { requireUser } from '@/lib/auth'
 import { PharmacyApprovalList } from '@/components/pharmacy-approval-list'
 import type { FilterChipItem } from '@/components/filter-chips'
+import { buildPaginationItems } from '@/lib/pagination'
 
 function buildApprovalHref(status: string, page: number) {
   const params = new URLSearchParams()
@@ -30,49 +31,17 @@ function buildApprovalHref(status: string, page: number) {
   return query ? `/admin?${query}` : '/admin'
 }
 
-function buildApprovalPageItems(currentPage: number, totalPages: number, status: string) {
-  const pages: Array<{ value: string; label: string; href: string; disabled?: boolean }> = []
-
-  if (totalPages <= 1) {
-    return pages
+function buildApprovalExportHref(options: { status: string; page: number; scope: 'current' | 'all' }) {
+  const params = new URLSearchParams()
+  if (options.status && options.status !== 'all') {
+    params.set('approvalStatus', options.status)
   }
-
-  const addPage = (page: number) => {
-    pages.push({
-      value: String(page),
-      label: String(page),
-      href: buildApprovalHref(status, page),
-    })
+  params.set('scope', options.scope)
+  if (options.scope === 'current' && options.page > 1) {
+    params.set('page', String(options.page))
   }
-
-  const addEllipsis = (key: string) => {
-    pages.push({
-      value: key,
-      label: '…',
-      href: '#',
-      disabled: true,
-    })
-  }
-
-  addPage(1)
-  const start = Math.max(2, currentPage - 1)
-  const end = Math.min(totalPages - 1, currentPage + 1)
-
-  if (start > 2) {
-    addEllipsis('start')
-  }
-
-  for (let page = start; page <= end; page += 1) {
-    addPage(page)
-  }
-
-  if (end < totalPages - 1) {
-    addEllipsis('end')
-  }
-
-  addPage(totalPages)
-
-  return pages
+  const query = params.toString()
+  return query ? `/api/admin/exports/pharmacy-approvals?${query}` : '/api/admin/exports/pharmacy-approvals'
 }
 
 export default async function AdminPage({
@@ -123,10 +92,10 @@ export default async function AdminPage({
       href: buildApprovalHref(status, 1),
     })),
   ]
-  const pageItems = buildApprovalPageItems(
+  const paginationItems = buildPaginationItems(
     approvalPageData.pagination.page,
     approvalPageData.pagination.totalPages,
-    approvalStatus,
+    (nextPage) => buildApprovalHref(approvalStatus, nextPage),
   )
 
   return (
@@ -226,8 +195,17 @@ export default async function AdminPage({
             <p className="muted">Review new partner registrations and existing network status.</p>
           </div>
           <div className="hero-actions">
-            <Link href="/api/admin/exports/pharmacy-approvals" className="button button-secondary">
-              Export approvals CSV
+            <Link
+              href={buildApprovalExportHref({ status: approvalStatus, page: approvalPage, scope: 'current' }) as never}
+              className="button button-secondary"
+            >
+              Export current page CSV
+            </Link>
+            <Link
+              href={buildApprovalExportHref({ status: approvalStatus, page: approvalPage, scope: 'all' }) as never}
+              className="button button-secondary"
+            >
+              Export filtered CSV
             </Link>
           </div>
         </div>
@@ -236,7 +214,7 @@ export default async function AdminPage({
           selectedStatus={approvalStatus}
           statusItems={statusItems}
           pagination={approvalPageData.pagination}
-          pageItems={pageItems}
+          paginationItems={paginationItems}
         />
       </div>
 

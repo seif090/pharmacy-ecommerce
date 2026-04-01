@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { PrescriptionUploadForm } from '@/components/prescription-upload-form'
 import { PrescriptionTracker } from '@/components/prescription-tracker'
 
@@ -16,7 +17,9 @@ export default function PrescriptionsPage() {
 
       <div className="two-col">
         <PrescriptionUploadForm />
-        <PrescriptionTracker />
+        <Suspense fallback={<div className="empty-state compact">Loading prescription tracker...</div>}>
+          <PrescriptionTracker />
+        </Suspense>
       </div>
     </section>
   )

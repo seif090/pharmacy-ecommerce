@@ -1,8 +1,11 @@
 'use client'
 
 import type { FormEvent } from 'react'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { FilterChips } from '@/components/filter-chips'
+import { PaginationBar } from '@/components/pagination-bar'
+import { buildPaginationItems, buildPaginationSummary } from '@/lib/pagination'
 
 type TrackerPrescription = {
   id: string
@@ -30,21 +33,58 @@ type Pagination = {
   totalPages: number
 }
 
+function normalizeStatus(value: string | null) {
+  const candidate = value?.toUpperCase() ?? 'ALL'
+  return statuses.includes(candidate as (typeof statuses)[number]) ? candidate : 'ALL'
+}
+
 export function PrescriptionTracker() {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  const queryString = searchParams.toString()
+
+  const orderNumberQuery = searchParams.get('orderNumber')?.trim() ?? ''
+  const customerEmailQuery = searchParams.get('customerEmail')?.trim() ?? ''
+  const statusFilter = normalizeStatus(searchParams.get('status'))
+  const page = Math.max(1, Number(searchParams.get('page') ?? '1') || 1)
+
+  const [orderNumber, setOrderNumber] = useState(orderNumberQuery)
+  const [customerEmail, setCustomerEmail] = useState(customerEmailQuery)
   const [items, setItems] = useState<TrackerPrescription[]>([])
-  const [statusFilter, setStatusFilter] = useState<(typeof statuses)[number]>('ALL')
-  const [search, setSearch] = useState<{ orderNumber: string; customerEmail: string } | null>(null)
   const [pagination, setPagination] = useState<Pagination | null>(null)
-  const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const activeSearch = search
-    if (!activeSearch) {
+    setOrderNumber(orderNumberQuery)
+    setCustomerEmail(customerEmailQuery)
+  }, [customerEmailQuery, orderNumberQuery])
+
+  const updateQuery = useCallback((params: Record<string, string | null>) => {
+    const nextParams = new URLSearchParams(queryString)
+
+    for (const [key, value] of Object.entries(params)) {
+      if (!value) {
+        nextParams.delete(key)
+      } else {
+        nextParams.set(key, value)
+      }
+    }
+
+    const query = nextParams.toString()
+    router.replace((query ? `${pathname}?${query}` : pathname) as never)
+  }, [pathname, queryString, router])
+
+  useEffect(() => {
+    if (!orderNumberQuery || !customerEmailQuery) {
+      setItems([])
+      setPagination(null)
+      setError(null)
       return
     }
-    const { orderNumber, customerEmail } = activeSearch
+
+    let cancelled = false
 
     async function loadPrescriptions() {
       setLoading(true)
@@ -52,8 +92,8 @@ export function PrescriptionTracker() {
 
       try {
         const url = new URL('/api/prescriptions/lookup', window.location.origin)
-        url.searchParams.set('orderNumber', orderNumber)
-        url.searchParams.set('customerEmail', customerEmail)
+        url.searchParams.set('orderNumber', orderNumberQuery)
+        url.searchParams.set('customerEmail', customerEmailQuery)
         url.searchParams.set('page', String(page))
         url.searchParams.set('pageSize', String(PAGE_SIZE))
 
@@ -68,83 +108,82 @@ export function PrescriptionTracker() {
           throw new Error(result.message ?? 'Could not find prescriptions.')
         }
 
+        if (cancelled) {
+          return
+        }
+
         setItems(result.prescriptions ?? [])
         setPagination(result.pagination ?? null)
+
         if (result.pagination && result.pagination.page !== page) {
-          setPage(result.pagination.page)
+          updateQuery({ page: String(result.pagination.page) })
         }
       } catch (lookupError) {
+        if (cancelled) {
+          return
+        }
+
         setError(lookupError instanceof Error ? lookupError.message : 'Could not search prescriptions.')
         setItems([])
         setPagination(null)
       } finally {
-        setLoading(false)
+        if (!cancelled) {
+          setLoading(false)
+        }
       }
     }
 
     loadPrescriptions()
-  }, [page, search])
+
+    return () => {
+      cancelled = true
+    }
+  }, [customerEmailQuery, orderNumberQuery, page, queryString, updateQuery])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
     const formData = new FormData(event.currentTarget)
-    const orderNumber = String(formData.get('orderNumber') ?? '').trim()
-    const customerEmail = String(formData.get('customerEmail') ?? '').trim()
+    const nextOrderNumber = String(formData.get('orderNumber') ?? '').trim()
+    const nextCustomerEmail = String(formData.get('customerEmail') ?? '').trim()
 
-    setStatusFilter('ALL')
-    setSearch({ orderNumber, customerEmail })
-    setPage(1)
+    updateQuery({
+      orderNumber: nextOrderNumber,
+      customerEmail: nextCustomerEmail,
+      page: '1',
+      status: 'ALL',
+    })
   }
 
-  const filteredItems = useMemo(
-    () => (statusFilter === 'ALL' ? items : items.filter((item) => item.status === statusFilter)),
-    [items, statusFilter],
-  )
-  const pageButtons = useMemo(() => {
-    if (!pagination || pagination.totalPages <= 1) {
-      return []
-    }
-
-    if (pagination.totalPages <= 5) {
-      return Array.from({ length: pagination.totalPages }, (_, index) => index + 1)
-    }
-
-    const pages: Array<number | 'ellipsis-start' | 'ellipsis-end'> = [1]
-    const start = Math.max(2, page - 1)
-    const end = Math.min(pagination.totalPages - 1, page + 1)
-
-    if (start > 2) {
-      pages.push('ellipsis-start')
-    }
-
-    for (let current = start; current <= end; current += 1) {
-      pages.push(current)
-    }
-
-    if (end < pagination.totalPages - 1) {
-      pages.push('ellipsis-end')
-    }
-
-    pages.push(pagination.totalPages)
-    return pages
-  }, [page, pagination])
+  const filteredItems = statusFilter === 'ALL' ? items : items.filter((item) => item.status === statusFilter)
 
   const chipItems = statuses.map((status) => ({
     value: status,
     label: status === 'ALL' ? 'All statuses' : status,
+    href: status === 'ALL' ? `${pathname}` : buildStatusHref(status),
   }))
 
-  function goToPage(nextPage: number) {
-    if (!pagination) {
-      return
-    }
+  const paginationItems = pagination
+    ? buildPaginationItems(pagination.page, pagination.totalPages, (nextPage) => buildPageHref(nextPage))
+    : []
 
-    if (nextPage < 1 || nextPage > pagination.totalPages) {
-      return
+  function buildStatusHref(status: (typeof statuses)[number]) {
+    const nextParams = new URLSearchParams(queryString)
+    if (status === 'ALL') {
+      nextParams.delete('status')
+    } else {
+      nextParams.set('status', status)
     }
+    nextParams.set('page', '1')
+    const query = nextParams.toString()
+    return query ? `${pathname}?${query}` : pathname
+  }
 
-    setPage(nextPage)
+  function buildPageHref(nextPage: number) {
+    const nextParams = new URLSearchParams(queryString)
+    nextParams.set('page', String(nextPage))
+    const query = nextParams.toString()
+    return query ? `${pathname}?${query}` : pathname
   }
 
   return (
@@ -160,11 +199,24 @@ export function PrescriptionTracker() {
         <div className="form-grid-2">
           <label>
             Order number
-            <input name="orderNumber" required placeholder="MD-12345678" />
+            <input
+              name="orderNumber"
+              required
+              placeholder="MD-12345678"
+              value={orderNumber}
+              onChange={(event) => setOrderNumber(event.target.value)}
+            />
           </label>
           <label>
             Customer email
-            <input name="customerEmail" type="email" required placeholder="ahmed@example.com" />
+            <input
+              name="customerEmail"
+              type="email"
+              required
+              placeholder="ahmed@example.com"
+              value={customerEmail}
+              onChange={(event) => setCustomerEmail(event.target.value)}
+            />
           </label>
         </div>
         <button type="submit" className="button" disabled={loading}>
@@ -172,7 +224,7 @@ export function PrescriptionTracker() {
         </button>
       </form>
 
-      {search ? (
+      {orderNumberQuery && customerEmailQuery ? (
         <div className="stack">
           <div className="card">
             <div className="section-heading">
@@ -180,15 +232,14 @@ export function PrescriptionTracker() {
                 <h4>Quick filters</h4>
                 <p className="muted">Switch prescription status chips instantly.</p>
               </div>
-              <button type="button" className="button button-secondary" onClick={() => setStatusFilter('ALL')}>
+              <button type="button" className="button button-secondary" onClick={() => updateQuery({ status: 'ALL', page: '1' })}>
                 Clear filters
               </button>
             </div>
             <FilterChips
               items={chipItems}
               selectedValue={statusFilter}
-              mode="button"
-              onSelect={(value) => setStatusFilter(value as (typeof statuses)[number])}
+              mode="link"
             />
           </div>
 
@@ -223,47 +274,14 @@ export function PrescriptionTracker() {
             )}
           </div>
 
-          {pagination && pagination.totalPages > 1 ? (
-            <div className="card">
-              <div className="section-heading">
-                <div>
-                  <h4>Pages</h4>
-                  <p className="muted">
-                    Page {pagination.page} of {pagination.totalPages} - {pagination.total} result
-                    {pagination.total === 1 ? '' : 's'}
-                  </p>
-                </div>
-              </div>
-              <div className="hero-actions" style={{ flexWrap: 'wrap' }}>
-                <button type="button" className="button button-secondary" onClick={() => goToPage(page - 1)} disabled={page <= 1}>
-                  Previous
-                </button>
-                {pageButtons.map((item) =>
-                  typeof item === 'number' ? (
-                    <button
-                      key={item}
-                      type="button"
-                      className={page === item ? 'button' : 'button button-secondary'}
-                      onClick={() => goToPage(item)}
-                    >
-                      {item}
-                    </button>
-                  ) : (
-                    <span key={item} className="badge">
-                      ...
-                    </span>
-                  ),
-                )}
-                <button
-                  type="button"
-                  className="button button-secondary"
-                  onClick={() => goToPage(page + 1)}
-                  disabled={page >= pagination.totalPages}
-                >
-                  Next
-                </button>
-              </div>
-            </div>
+          {pagination ? (
+            <PaginationBar
+              items={paginationItems}
+              selectedValue={String(page)}
+              summary={buildPaginationSummary(pagination.page, pagination.totalPages, pagination.total)}
+              title="Pages"
+              description="Browse matched prescriptions page by page."
+            />
           ) : null}
         </div>
       ) : (

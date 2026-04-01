@@ -2,6 +2,8 @@
 
 import { useState } from 'react'
 import { FilterChips, type FilterChipItem } from '@/components/filter-chips'
+import { PaginationBar } from '@/components/pagination-bar'
+import { buildPaginationSummary, type PaginationChipItem } from '@/lib/pagination'
 
 type ApprovalPharmacy = {
   id: string
@@ -19,18 +21,12 @@ type ApprovalPharmacy = {
 
 export type { ApprovalPharmacy }
 
-type PaginationItem = {
-  value: string
-  label: string
-  href: string
-}
-
 export function PharmacyApprovalList({
   pharmacies,
   selectedStatus,
   statusItems,
   pagination,
-  pageItems,
+  paginationItems,
 }: {
   pharmacies: ApprovalPharmacy[]
   selectedStatus: string
@@ -40,7 +36,7 @@ export function PharmacyApprovalList({
     totalPages: number
     total: number
   }
-  pageItems: PaginationItem[]
+  paginationItems: PaginationChipItem[]
 }) {
   const [items, setItems] = useState(pharmacies)
 
@@ -83,17 +79,13 @@ export function PharmacyApprovalList({
         </div>
         <FilterChips items={statusItems} selectedValue={selectedStatus} mode="link" />
       </div>
-      {pageItems.length > 1 ? (
-        <div className="card">
-          <div className="section-heading">
-            <div>
-              <h4>Pages</h4>
-              <p className="muted">Browse pharmacy approvals page by page.</p>
-            </div>
-          </div>
-          <FilterChips items={pageItems} selectedValue={String(pagination.page)} mode="link" />
-        </div>
-      ) : null}
+      <PaginationBar
+        items={paginationItems}
+        selectedValue={String(pagination.page)}
+        summary={buildPaginationSummary(pagination.page, pagination.totalPages, pagination.total)}
+        title="Pages"
+        description="Browse pharmacy approvals page by page."
+      />
       <div className="grid-products">
         {items.map((pharmacy) => (
           <article className="card" key={pharmacy.id}>
