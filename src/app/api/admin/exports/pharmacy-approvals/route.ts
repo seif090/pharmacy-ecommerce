@@ -11,8 +11,7 @@ export async function GET() {
 
   const prisma = getPrisma()
   const pharmacies = await prisma.pharmacy.findMany({
-    where: { status: 'PENDING' },
-    orderBy: { createdAt: 'desc' },
+    orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
     include: {
       _count: { select: { products: true, pharmacyOrders: true } },
       users: { select: { name: true, email: true } },

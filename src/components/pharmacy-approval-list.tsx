@@ -22,6 +22,10 @@ export function PharmacyApprovalList({
   pharmacies: ApprovalPharmacy[]
 }) {
   const [items, setItems] = useState(pharmacies)
+  const [statusFilter, setStatusFilter] = useState<string>('PENDING')
+
+  const statuses = Array.from(new Set(items.map((pharmacy) => pharmacy.status)))
+  const filteredItems = items.filter((pharmacy) => !statusFilter || pharmacy.status === statusFilter)
 
   async function updateStatus(id: string, status: 'ACTIVE' | 'PENDING' | 'SUSPENDED') {
     const response = await fetch(`/api/pharmacies/${id}`, {
@@ -47,34 +51,59 @@ export function PharmacyApprovalList({
   }
 
   return (
-    <div className="grid-products">
-      {items.map((pharmacy) => (
-        <article className="card" key={pharmacy.id}>
-          <span className="badge">{pharmacy.status}</span>
-          <h3>{pharmacy.name}</h3>
-          <p className="muted">
-            {pharmacy.address}
-            <br />
-            {pharmacy.city}
-          </p>
-          <p className="muted">License: {pharmacy.licenseNumber}</p>
-          <p className="muted">
-            {pharmacy._count.products} products - {pharmacy._count.pharmacyOrders} orders
-          </p>
-          <div className="hero-actions">
-            <button type="button" className="button" onClick={() => updateStatus(pharmacy.id, 'ACTIVE')}>
-              Approve
-            </button>
-            <button
-              type="button"
-              className="button button-secondary"
-              onClick={() => updateStatus(pharmacy.id, 'SUSPENDED')}
-            >
-              Suspend
-            </button>
-          </div>
-        </article>
-      ))}
+    <div className="stack">
+      <div className="hero-actions" style={{ flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          className={statusFilter === '' ? 'button' : 'button button-secondary'}
+          onClick={() => setStatusFilter('')}
+        >
+          All statuses
+        </button>
+        {statuses.map((status) => (
+          <button
+            key={status}
+            type="button"
+            className={statusFilter === status ? 'button' : 'button button-secondary'}
+            onClick={() => setStatusFilter(status)}
+          >
+            {status}
+          </button>
+        ))}
+      </div>
+      <div className="grid-products">
+        {filteredItems.length ? (
+          filteredItems.map((pharmacy) => (
+            <article className="card" key={pharmacy.id}>
+              <span className="badge">{pharmacy.status}</span>
+              <h3>{pharmacy.name}</h3>
+              <p className="muted">
+                {pharmacy.address}
+                <br />
+                {pharmacy.city}
+              </p>
+              <p className="muted">License: {pharmacy.licenseNumber}</p>
+              <p className="muted">
+                {pharmacy._count.products} products - {pharmacy._count.pharmacyOrders} orders
+              </p>
+              <div className="hero-actions">
+                <button type="button" className="button" onClick={() => updateStatus(pharmacy.id, 'ACTIVE')}>
+                  Approve
+                </button>
+                <button
+                  type="button"
+                  className="button button-secondary"
+                  onClick={() => updateStatus(pharmacy.id, 'SUSPENDED')}
+                >
+                  Suspend
+                </button>
+              </div>
+            </article>
+          ))
+        ) : (
+          <div className="empty-state compact">No pharmacies match the selected status.</div>
+        )}
+      </div>
     </div>
   )
 }

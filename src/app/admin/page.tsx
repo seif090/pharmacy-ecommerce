@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { getAdminNotifications, getCategories, getDashboardStats, getPharmacies, getPendingPharmacies, getProducts, getRecentOrders, getRecentPrescriptions, getUnreadAdminNotificationCount } from '@/lib/catalog'
+import { getAdminNotifications, getCategories, getDashboardStats, getPharmacies, getProducts, getRecentOrders, getRecentPrescriptions, getUnreadAdminNotificationCount } from '@/lib/catalog'
 import { formatCurrency } from '@/lib/utils'
 import { NewProductForm } from '@/components/new-product-form'
 import { OrdersTable } from '@/components/orders-table'
@@ -17,7 +17,6 @@ export default async function AdminPage() {
     prescriptions,
     categories,
     pharmacies,
-    pendingPharmacies,
     notifications,
     unreadNotifications,
   ] = await Promise.all([
@@ -27,7 +26,6 @@ export default async function AdminPage() {
     getRecentPrescriptions(),
     getCategories(),
     getPharmacies(),
-    getPendingPharmacies(),
     getAdminNotifications(),
     getUnreadAdminNotificationCount(),
   ])
@@ -125,14 +123,16 @@ export default async function AdminPage() {
       <div className="section">
         <div className="section-heading">
           <div>
-            <h3>Pending pharmacy approvals</h3>
-            <p className="muted">Review new partner registrations before they go live.</p>
+            <h3>Pharmacy approvals</h3>
+            <p className="muted">Review new partner registrations and existing network status.</p>
           </div>
-          <Link href="/api/admin/exports/pharmacy-approvals" className="button button-secondary">
-            Export approvals CSV
-          </Link>
+          <div className="hero-actions">
+            <Link href="/api/admin/exports/pharmacy-approvals" className="button button-secondary">
+              Export approvals CSV
+            </Link>
+          </div>
         </div>
-        <PharmacyApprovalList pharmacies={pendingPharmacies} />
+        <PharmacyApprovalList pharmacies={pharmacies} />
       </div>
 
       <div className="section">
@@ -145,7 +145,12 @@ export default async function AdminPage() {
             <h3>Prescription reviews</h3>
             <p className="muted">Approve or reject pharmacy uploads.</p>
           </div>
-          <span className="badge">{formatCurrency(stats.revenue)} revenue</span>
+          <div className="hero-actions">
+            <a href="/api/admin/exports/prescriptions" className="button button-secondary">
+              Export prescriptions CSV
+            </a>
+            <span className="badge">{formatCurrency(stats.revenue)} revenue</span>
+          </div>
         </div>
         <PrescriptionReviewList prescriptions={prescriptions} />
       </div>
