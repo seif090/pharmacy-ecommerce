@@ -128,6 +128,9 @@ export default async function AdminPage() {
             <h3>Pending pharmacy approvals</h3>
             <p className="muted">Review new partner registrations before they go live.</p>
           </div>
+          <Link href="/api/admin/exports/pharmacy-approvals" className="button button-secondary">
+            Export approvals CSV
+          </Link>
         </div>
         <PharmacyApprovalList pharmacies={pendingPharmacies} />
       </div>

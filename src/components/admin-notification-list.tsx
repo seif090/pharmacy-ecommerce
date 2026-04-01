@@ -28,6 +28,7 @@ export function AdminNotificationList({
 }) {
   const [items, setItems] = useState(notifications)
   const router = useRouter()
+  const unreadCount = items.filter((notification) => !notification.readAt).length
 
   async function markAsRead(id: string) {
     const response = await fetch(`/api/admin/notifications/${id}`, {
@@ -58,12 +59,37 @@ export function AdminNotificationList({
     }
   }
 
+  async function markAllAsRead() {
+    const response = await fetch('/api/admin/notifications/mark-all-read', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+    })
+
+    if (!response.ok) {
+      return
+    }
+
+    setItems((current) =>
+      current.map((notification) => ({
+        ...notification,
+        readAt: notification.readAt ?? new Date(),
+      })),
+    )
+    router.refresh()
+  }
+
   if (!items.length) {
     return <div className="empty-state compact">No notifications yet.</div>
   }
 
   return (
     <div className="stack">
+      <div className="hero-actions">
+        <span className="badge">{unreadCount} unread</span>
+        <button type="button" className="button button-secondary" onClick={markAllAsRead} disabled={!unreadCount}>
+          Mark all as read
+        </button>
+      </div>
       {items.map((notification) => (
         <article className="card" key={notification.id}>
               <div className="section-heading">
